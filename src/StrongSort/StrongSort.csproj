@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>StrongSort</RootNamespace>
+    <AssemblyName>StrongSort</AssemblyName>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>StrongSort.Net</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Artur Buszka</Authors>
+    <Product>StrongSort.Net</Product>
+    <Description>Pure C# implementation of the StrongSORT multi-object tracker (DeepSORT with NSA Kalman filter, EMA appearance embedding and combined appearance/motion matching). No native or ML dependencies — bring your own detector and ReID embeddings.</Description>
+    <Copyright>Copyright (c) 2026 Artur Buszka</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/arturbuszka/StrongSort.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/arturbuszka/StrongSort.NET</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>tracking;mot;strongsort;deepsort;kalman;computer-vision</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Public API is documented on the user-facing types; suppress warnings for
+         internal helper types (Kalman filter, Hungarian solver internals). -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+    <None Include="..\..\NOTICE" Pack="true" PackagePath="\" />
+    <InternalsVisibleTo Include="StrongSort.Tests" />
+  </ItemGroup>
+
+</Project>

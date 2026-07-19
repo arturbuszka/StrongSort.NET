@@ -1,0 +1,20 @@
+StrongSort.Net
+==============
+
+A clean-room C# / .NET implementation of the StrongSORT multi-object tracking
+algorithm. It is an independent implementation written from the published
+description of the algorithm; it does not incorporate source code from any
+third-party implementation.
+
+Algorithm reference:
+  StrongSORT: Make DeepSORT Great Again
+  Yunhao Du, Zhicheng Zhao, Yang Song, Yanyun Zhao, Fei Su, Tao Gong, Hongying Meng
+  arXiv:2202.13514 — https://arxiv.org/abs/2202.13514
+  (builds on DeepSORT: Wojke, Bewley, Paulus, arXiv:1703.07402)
+
+The default hyperparameters exposed on StrongSortOptions follow the SoccerNet
+game-state tracking baseline; the values from the original StrongSORT paper are
+documented inline in the source.
+
+This project is distributed under the MIT License. See the LICENSE file for the
+full text and copyright notice.

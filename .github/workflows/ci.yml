@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore StrongSort.slnx
+
+      - name: Build
+        run: dotnet build StrongSort.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test StrongSort.slnx -c Release --no-build --verbosity normal
+
+      - name: Pack (validate NuGet package)
+        run: dotnet pack src/StrongSort/StrongSort.csproj -c Release --no-build -o ./artifacts
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: ./artifacts/*.nupkg
