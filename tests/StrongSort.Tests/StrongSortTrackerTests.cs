@@ -68,6 +68,107 @@ public class StrongSortTrackerTests
         Assert.Equal(originalId, reacquired.TrackId);
     }
 
+    private static readonly StrongSortOptions OriginalStrongSortGating = new()
+    {
+        KalmanNoise = KalmanNoise.StrongSort,
+        GatingUsesConfidence = true,
+    };
+
+    // After a short gap (no IoU stage) the person returns in place with a different pose (wider box).
+    private static long? ReturnWithNewPose(StrongSortOptions options)
+    {
+        var tracker = new StrongSortTracker(options);
+        var feature = Feature(0.6f, 0.8f, 0);
+        long id = 0;
+        for (var frame = 0; frame < 5; frame++)
+            id = Assert.Single(tracker.Update(new[] { Obs(100, 200, feature) })).TrackId;
+        for (var i = 0; i < 3; i++)
+            tracker.Update(Array.Empty<Observation>());
+
+        var wide = new Observation(100, 200, 55, 100, 0.9f, feature, "back");
+        var back = tracker.Update(new[] { wide }).Single(t => Equals(t.Tag, "back"));
+        return back.TrackId == id ? id : null;
+    }
+
+    [Fact]
+    public void PoseChange_AfterGap_KeepsIdentity_WithBpbReidKalman()
+        => Assert.NotNull(ReturnWithNewPose(new StrongSortOptions()));
+
+    [Fact]
+    public void PoseChange_AfterGap_IsGatedOut_WithOriginalStrongSortNoise()
+        => Assert.Null(ReturnWithNewPose(OriginalStrongSortGating));
+
+    [Theory]
+    [InlineData(KalmanNoise.BpbReid, false, true)]
+    [InlineData(KalmanNoise.StrongSort, false, true)]
+    [InlineData(KalmanNoise.StrongSort, true, false)]
+    public void Gate_AspectChange(KalmanNoise noise, bool useConfidence, bool passes)
+    {
+        var kf = new KalmanFilterXyah(noise);
+        var (mean, cov) = kf.Initiate(new double[] { 100, 200, 0.4, 100 });
+        for (var i = 0; i < 5; i++)
+        {
+            (mean, cov) = kf.Predict(mean, cov);
+            (mean, cov) = kf.Update(mean, cov, new double[] { 100, 200, 0.4, 100 }, 0.9);
+        }
+        (mean, cov) = kf.Predict(mean, cov);
+
+        var distance = kf.GatingDistance(mean, cov, new double[] { 100, 200, 0.5, 100 }, useConfidence ? 0.9 : 0);
+        Assert.Equal(passes, distance <= KalmanFilterXyah.Chi2Inv95[4]);
+    }
+
+    [Fact]
+    public void KalmanPrediction_StopsAfterMaxPredictionsWithoutUpdate()
+    {
+        var tracker = new StrongSortTracker(new StrongSortOptions { MaxKalmanPredictionsWithoutUpdate = 3 });
+        for (var frame = 0; frame < 10; frame++)
+            tracker.Update(new[] { Obs(100 + frame * 10, 200) }); // builds up a velocity
+
+        var lefts = new List<float>();
+        for (var i = 0; i < 6; i++)
+            lefts.Add(Assert.Single(tracker.Update(Array.Empty<Observation>())).BboxLtwh[0]);
+
+        // misses 1..3 still move the box, from the 4th miss on it stays put
+        Assert.All(Enumerable.Range(1, 2), i => Assert.True(lefts[i] > lefts[i - 1]));
+        Assert.All(Enumerable.Range(3, 3), i => Assert.Equal(lefts[2], lefts[i]));
+    }
+
+    private static double[,] Shift(double dx, double dy) => new double[,] { { 1, 0, dx }, { 0, 1, dy }, { 0, 0, 1 } };
+
+    [Fact]
+    public void CameraMotion_MovesTrackBox()
+    {
+        var tracker = new StrongSortTracker();
+        tracker.Update(new[] { Obs(100, 200) });
+        var box = Assert.Single(tracker.Update(Array.Empty<Observation>(), Shift(-30, 5))).BboxLtwh;
+        Assert.Equal(70, box[0], 3);
+        Assert.Equal(205, box[1], 3);
+        Assert.Equal(40, box[2], 3);
+        Assert.Equal(100, box[3], 3);
+    }
+
+    // A standing person leaves the frame while the camera pans 10 px/frame, then is detected again
+    // 40 frames later, 400 px further left in the image: far beyond the motion gate of the frozen prediction.
+    private static bool ReturnsAfterPan(bool compensate)
+    {
+        var tracker = new StrongSortTracker();
+        var feature = Feature(0.6f, 0.8f, 0);
+        long id = 0;
+        for (var frame = 0; frame < 5; frame++)
+            id = Assert.Single(tracker.Update(new[] { Obs(800, 200, feature) })).TrackId;
+        for (var i = 0; i < 40; i++)
+            tracker.Update(Array.Empty<Observation>(), compensate ? Shift(-10, 0) : null);
+        var back = tracker.Update(new[] { Obs(400 - 10, 200, feature, tag: "back") }, compensate ? Shift(-10, 0) : null)
+            .Single(t => Equals(t.Tag, "back"));
+        return back.TrackId == id;
+    }
+
+    [Fact]
+    public void CameraMotion_KeepsIdentityAfterPan() => Assert.True(ReturnsAfterPan(compensate: true));
+
+    [Fact]
+    public void WithoutCameraMotion_PanBreaksIdentity() => Assert.False(ReturnsAfterPan(compensate: false));
+
     [Fact]
     public void NoFeatures_FallsBackToIouMatching()
     {

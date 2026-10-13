@@ -9,13 +9,16 @@ namespace StrongSort;
 public sealed class StrongSortTracker
 {
     private readonly StrongSortOptions _options;
-    private readonly KalmanFilterXyah _kf = new();
+    private readonly KalmanFilterXyah _kf;
     private readonly List<Track> _tracks = new();
     private long _nextId = 1;
 
     /// <summary>Creates a tracker; omit <paramref name="options"/> for the SoccerNet baseline defaults.</summary>
     public StrongSortTracker(StrongSortOptions? options = null)
-        => _options = options ?? new StrongSortOptions();
+    {
+        _options = options ?? new StrongSortOptions();
+        _kf = new KalmanFilterXyah(_options.KalmanNoise);
+    }
 
     /// <summary>Drops all tracks and resets id numbering (call between videos).</summary>
     public void Reset()
@@ -26,7 +29,13 @@ public sealed class StrongSortTracker
 
     /// <summary>Advances the tracker by one frame and returns all live tracks.
     /// Tracks matched in this frame carry the observation's Tag and TimeSinceUpdate == 0.</summary>
-    public IReadOnlyList<TrackResult> Update(IReadOnlyList<Observation> observations)
+    /// <param name="observations">Detections of the new frame.</param>
+    /// <param name="cameraMotion">Optional camera motion compensation: a 3x3 matrix mapping pixels of the previous
+    /// frame to the new one (e.g. an affine warp with last row 0 0 1). After the Kalman prediction it moves the box
+    /// of every track, as <c>Track.camera_update</c> in tracklab; velocity and covariance are left as they are.
+    /// Keeps a track that is no longer predicted (see <see cref="StrongSortOptions.MaxKalmanPredictionsWithoutUpdate"/>)
+    /// where its person stands while the camera pans.</param>
+    public IReadOnlyList<TrackResult> Update(IReadOnlyList<Observation> observations, double[,]? cameraMotion = null)
     {
         var detections = observations
             .Where(o => o.Confidence >= _options.MinConfidence)
@@ -35,6 +44,13 @@ public sealed class StrongSortTracker
 
         foreach (var track in _tracks)
             track.Predict(_kf, _options.MaxKalmanPredictionsWithoutUpdate);
+        if (cameraMotion is not null)
+        {
+            if (cameraMotion.GetLength(0) != 3 || cameraMotion.GetLength(1) != 3)
+                throw new ArgumentException("Camera motion must be a 3x3 matrix.", nameof(cameraMotion));
+            foreach (var track in _tracks)
+                track.CameraUpdate(cameraMotion);
+        }
 
         var (matches, unmatchedTracks, unmatchedDetections) = Match(detections);
 
@@ -93,7 +109,8 @@ public sealed class StrongSortTracker
                     cost[r, c] = float.PositiveInfinity;
                     continue;
                 }
-                var mahalanobis = _kf.GatingDistance(track.Mean, track.Covariance, ToXyah(det), det.Confidence);
+                var mahalanobis = _kf.GatingDistance(track.Mean, track.Covariance, ToXyah(det),
+                    _options.GatingUsesConfidence ? det.Confidence : 0f);
                 if (_options.EnableMotionGating && mahalanobis > gate)
                 {
                     cost[r, c] = float.PositiveInfinity;
@@ -214,10 +231,33 @@ internal sealed class Track
 
     public void Predict(KalmanFilterXyah kf, int maxPredictionsWithoutUpdate)
     {
-        if (TimeSinceUpdate <= maxPredictionsWithoutUpdate)
+        if (TimeSinceUpdate < maxPredictionsWithoutUpdate)
             (Mean, Covariance) = kf.Predict(Mean, Covariance);
         TimeSinceUpdate++;
         _lastTag = null;
+    }
+
+    /// <summary>Moves the box by a camera warp (tracklab <c>Track.camera_update</c>): both corners are mapped,
+    /// the box is rebuilt from them; velocity and covariance stay.</summary>
+    public void CameraUpdate(double[,] m)
+    {
+        var w = Mean[2] * Mean[3];
+        var h = Mean[3];
+        var (x1, y1) = Warp(m, Mean[0] - w / 2, Mean[1] - h / 2);
+        var (x2, y2) = Warp(m, Mean[0] + w / 2, Mean[1] + h / 2);
+        var newW = x2 - x1;
+        var newH = y2 - y1;
+        if (!(newW > 0 && newH > 0)) return; // degenerate warp: keep the box
+        Mean[0] = x1 + newW / 2;
+        Mean[1] = y1 + newH / 2;
+        Mean[2] = newW / newH;
+        Mean[3] = newH;
+    }
+
+    private static (double X, double Y) Warp(double[,] m, double x, double y)
+    {
+        var z = m[2, 0] * x + m[2, 1] * y + m[2, 2];
+        return ((m[0, 0] * x + m[0, 1] * y + m[0, 2]) / z, (m[1, 0] * x + m[1, 1] * y + m[1, 2]) / z);
     }
 
     public void Update(KalmanFilterXyah kf, Observation observation, StrongSortOptions options)

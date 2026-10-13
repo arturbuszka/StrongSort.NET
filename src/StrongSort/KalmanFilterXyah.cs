@@ -11,6 +11,17 @@ internal sealed class KalmanFilterXyah
     private const double StdWeightPosition = 1.0 / 20;
     private const double StdWeightVelocity = 1.0 / 160;
 
+    private readonly bool _heightScaledAspectNoise;
+
+    /// <param name="noise">Noise model of the aspect-ratio component: <see cref="KalmanNoise.BpbReid"/>
+    /// scales it with the box height like the other components, <see cref="KalmanNoise.StrongSort"/>
+    /// uses the small constants of the original StrongSORT.</param>
+    public KalmanFilterXyah(KalmanNoise noise = KalmanNoise.BpbReid)
+        => _heightScaledAspectNoise = noise == KalmanNoise.BpbReid;
+
+    private double AspectStd(double h, double weight, double constant)
+        => _heightScaledAspectNoise ? weight * h : constant;
+
     /// <summary>0.95 quantile of the chi-square distribution, used as Mahalanobis gate.</summary>
     public static readonly double[] Chi2Inv95 = { 0, 3.8415, 5.9915, 7.8147, 9.4877 };
 
@@ -21,8 +32,8 @@ internal sealed class KalmanFilterXyah
         var h = measurement[3];
         var std = new[]
         {
-            2 * StdWeightPosition * h, 2 * StdWeightPosition * h, 1e-2, 2 * StdWeightPosition * h,
-            10 * StdWeightVelocity * h, 10 * StdWeightVelocity * h, 1e-5, 10 * StdWeightVelocity * h,
+            2 * StdWeightPosition * h, 2 * StdWeightPosition * h, AspectStd(h, 2 * StdWeightPosition, 1e-2), 2 * StdWeightPosition * h,
+            10 * StdWeightVelocity * h, 10 * StdWeightVelocity * h, AspectStd(h, 10 * StdWeightVelocity, 1e-5), 10 * StdWeightVelocity * h,
         };
         var covariance = new double[8, 8];
         for (var i = 0; i < 8; i++) covariance[i, i] = std[i] * std[i];
@@ -34,8 +45,8 @@ internal sealed class KalmanFilterXyah
         var h = mean[3];
         var motionStd = new[]
         {
-            StdWeightPosition * h, StdWeightPosition * h, 1e-2, StdWeightPosition * h,
-            StdWeightVelocity * h, StdWeightVelocity * h, 1e-5, StdWeightVelocity * h,
+            StdWeightPosition * h, StdWeightPosition * h, AspectStd(h, StdWeightPosition, 1e-2), StdWeightPosition * h,
+            StdWeightVelocity * h, StdWeightVelocity * h, AspectStd(h, StdWeightVelocity, 1e-5), StdWeightVelocity * h,
         };
 
         // x' = F x with F = [[I, I], [0, I]] (dt = 1)
@@ -60,7 +71,7 @@ internal sealed class KalmanFilterXyah
     public (double[] mean, double[,] covariance) Project(double[] mean, double[,] covariance, double confidence)
     {
         var h = mean[3];
-        var std = new[] { StdWeightPosition * h, StdWeightPosition * h, 1e-1, StdWeightPosition * h };
+        var std = new[] { StdWeightPosition * h, StdWeightPosition * h, AspectStd(h, StdWeightPosition, 1e-1), StdWeightPosition * h };
         var nsa = 1 - confidence;
 
         var projMean = new double[4];
