@@ -29,9 +29,28 @@ public sealed record StrongSortOptions
     public float MinConfidence { get; init; } = 0f;
 
     /// <summary>Stop advancing the Kalman prediction after this many frames without measurements
-    /// (max_kalman_prediction_without_update).</summary>
+    /// (max_kalman_prediction_without_update): a track predicts while it has missed fewer frames than this.</summary>
     public int MaxKalmanPredictionsWithoutUpdate { get; init; } = 7;
 
     /// <summary>Use the chi-square Mahalanobis gate on the motion model during appearance matching.</summary>
     public bool EnableMotionGating { get; init; } = true;
+
+    /// <summary>Noise model of the Kalman aspect-ratio component. <see cref="KalmanNoise.BpbReid"/> (tracklab
+    /// bpbreid_strong_sort) scales it with the box height, so the gate effectively ignores pose-driven
+    /// aspect changes; <see cref="KalmanNoise.StrongSort"/> keeps the tight constants of the original paper.</summary>
+    public KalmanNoise KalmanNoise { get; init; } = KalmanNoise.BpbReid;
+
+    /// <summary>Scale the measurement noise of the Mahalanobis gate by (1 - detection confidence), as in the
+    /// Kalman update. Off in tracklab bpbreid_strong_sort, where the gate uses the unscaled noise.</summary>
+    public bool GatingUsesConfidence { get; init; } = false;
+}
+
+/// <summary>Noise model of the aspect-ratio component of the Kalman filter.</summary>
+public enum KalmanNoise
+{
+    /// <summary>Aspect-ratio noise proportional to the box height (tracklab bpbreid_strong_sort).</summary>
+    BpbReid,
+
+    /// <summary>Constant aspect-ratio noise (1e-2 / 1e-5 / 1e-1) of the original StrongSORT.</summary>
+    StrongSort,
 }
