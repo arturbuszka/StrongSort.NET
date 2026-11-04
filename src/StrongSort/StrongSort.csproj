@@ -13,7 +13,8 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <PackageId>StrongSort.Net</PackageId>
-    <Version>1.0.0</Version>
+    <Version>2.0.0</Version>
+    <PackageReleaseNotes>Breaking: Kalman noise, Mahalanobis gating and the prediction cutoff now default to tracklab bpbreid_strong_sort behaviour (set KalmanNoise = StrongSort and GatingUsesConfidence = true for the original constants and gate), and Update() gained an optional camera motion matrix, so callers must recompile.</PackageReleaseNotes>
     <Authors>Artur Buszka</Authors>
     <Product>StrongSort.Net</Product>
     <Description>Pure C# implementation of the StrongSORT multi-object tracker (DeepSORT with NSA Kalman filter, EMA appearance embedding and combined appearance/motion matching). No native or ML dependencies — bring your own detector and ReID embeddings.</Description>

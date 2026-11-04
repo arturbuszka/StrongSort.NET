@@ -1,10 +1,14 @@
 StrongSort.Net
 ==============
 
-A clean-room C# / .NET implementation of the StrongSORT multi-object tracking
-algorithm. It is an independent implementation written from the published
-description of the algorithm; it does not incorporate source code from any
-third-party implementation.
+A C# / .NET implementation of the StrongSORT multi-object tracking algorithm,
+written from the published description of the algorithm. Since version 2.0.0 the
+Kalman noise model, the Mahalanobis gate, the prediction cutoff and the camera
+motion update are aligned with the bpbreid_strong_sort tracker in TrackLab.
+
+TrackLab
+  Upstream:  https://github.com/TrackingLaboratory/tracklab
+  License:   MIT License, Copyright (c) 2022 bstandaert
 
 Algorithm reference:
   StrongSORT: Make DeepSORT Great Again

@@ -10,8 +10,9 @@ a multi-object tracker combining an NSA Kalman filter, EMA-smoothed appearance e
 and Hungarian assignment. No native or ML dependencies: bring your own detector and
 (optionally) ReID embeddings.
 
-This is an independent, clean-room implementation written from the published algorithm; it is
-not affiliated with the original authors.
+This is an independent implementation, not affiliated with the original authors. It was written
+from the published algorithm, and since 2.0.0 its Kalman noise, gating and camera motion update are
+aligned with the `bpbreid_strong_sort` tracker in [TrackLab](https://github.com/TrackingLaboratory/tracklab).
 
 ## Install
 
@@ -44,6 +45,22 @@ foreach (var frame in video)
 - `Tag` is an arbitrary payload (e.g. your detection id) returned on the matched track.
 - Defaults follow the SoccerNet game-state baseline; original paper defaults are documented
   on `StrongSortOptions`.
+- `Update(observations, cameraMotion)` takes an optional 3x3 matrix that moves every track with the
+  camera after the prediction. Leave it out when the camera is static or you have no estimate.
+
+## Upgrading from 1.x
+
+2.0.0 changes default tracking results, so expect different track IDs on the same video:
+
+- `KalmanNoise` defaults to `BpbReid`, which scales aspect-ratio noise with box height.
+- `GatingUsesConfidence` defaults to `false`, so the motion gate uses the unscaled measurement noise.
+- A track now predicts while it has missed fewer than `MaxKalmanPredictionsWithoutUpdate` frames.
+  It used to include that last frame too.
+
+To approximate 1.x results, set `KalmanNoise = KalmanNoise.StrongSort`,
+`GatingUsesConfidence = true` and raise `MaxKalmanPredictionsWithoutUpdate` by one (7 becomes 8).
+
+`Update()` gained an optional parameter, so code built against 1.x must be recompiled.
 
 ## Build & test
 
@@ -56,5 +73,5 @@ Targets `net8.0` and `net10.0`.
 
 ## License & attribution
 
-MIT — see [LICENSE](LICENSE). The StrongSORT and DeepSORT algorithm references, and a note on the
-clean-room nature of this port, are in [NOTICE](NOTICE).
+MIT — see [LICENSE](LICENSE). The StrongSORT and DeepSORT algorithm references and the TrackLab
+attribution are in [NOTICE](NOTICE).
